@@ -1,14 +1,9 @@
-{
-  "_comment": "Reflex Protocol - Example Configuration",
-  "_author": "Parsa Gholami 401100477",
-
+﻿{
   "log": {
     "loglevel": "info"
   },
-
   "inbounds": [
     {
-      "_comment": "Reflex server listening on port 443",
       "port": 443,
       "protocol": "reflex",
       "settings": {
@@ -20,7 +15,6 @@
         ],
         "fallbacks": [
           {
-            "_comment": "Unknown traffic is forwarded to a local nginx/caddy on port 8080",
             "dest": 8080
           }
         ]
@@ -28,62 +22,33 @@
       "streamSettings": {
         "network": "tcp",
         "security": "tls",
-        "tlsSettings": {
-          "certificates": [
-            {
-              "certificateFile": "/etc/ssl/certs/server.crt",
-              "keyFile": "/etc/ssl/private/server.key"
-            }
-          ]
-        }
+        "tlsSettings": {}
       }
     }
   ],
-
   "outbounds": [
     {
-      "protocol": "freedom",
-      "settings": {}
-    }
-  ],
-
-  "_client_example": {
-    "_comment": "Client-side configuration (run on local machine)",
-    "inbounds": [
-      {
-        "port": 1080,
-        "protocol": "socks",
-        "settings": {
-          "auth": "noauth"
-        }
-      }
-    ],
-    "outbounds": [
-      {
-        "protocol": "reflex",
-        "settings": {
-          "vnext": [
-            {
-              "address": "your-server.example.com",
-              "port": 443,
-              "users": [
-                {
-                  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                  "level": 0,
-                  "morphingProfile": "https"
-                }
-              ]
-            }
-          ]
-        },
-        "streamSettings": {
-          "network": "tcp",
-          "security": "tls",
-          "tlsSettings": {
-            "serverName": "your-server.example.com"
+      "protocol": "reflex",
+      "settings": {
+        "vnext": [
+          {
+            "address": "example.com",
+            "port": 443,
+            "users": [
+              {
+                "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "level": 0,
+                "morphingProfile": "https"
+              }
+            ]
           }
-        }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {}
       }
-    ]
-  }
+    }
+  ]
 }
