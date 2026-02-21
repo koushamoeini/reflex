@@ -1,0 +1,100 @@
+# Grade PR (comment): runs when grade-run completes. Downloads grades artifact
+# and posts the grading table as a comment on the PR. Runs in base-repo context
+# so GITHUB_TOKEN has write access even for fork PRs.
+name: Grade PR (comment)
+
+on:
+  workflow_run:
+    workflows: ["Grade PR (run)"]
+    types:
+      - completed
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  comment-pr:
+    runs-on: ubuntu-latest
+    # Only run when the completed workflow was triggered by a PR (not workflow_dispatch without PR)
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled'
+    steps:
+      - name: Download grades artifact from grading run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: grades-output
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = fs.existsSync('grades.json') ? 'grades.json' : 'grades-output/grades.json';
+            if (!fs.existsSync(path)) {
+              console.log('grades.json not found, skipping comment');
+              return;
+            }
+            let prNumber;
+            try {
+              prNumber = parseInt(fs.readFileSync('pr_number.txt', 'utf8').trim(), 10);
+            } catch (e) {
+              console.log('pr_number.txt not found, skipping comment');
+              return;
+            }
+            if (!Number.isInteger(prNumber) || prNumber < 1) {
+              console.log('Invalid PR number, skipping comment');
+              return;
+            }
+            const grades = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const buildOk = grades.buildOk === true;
+            const testPass = grades.testsPass === true;
+            const lintPass = grades.lintPass === true;
+            const cov = grades.coverage || 0;
+            const mode = grades.gradingMode || 'fallback';
+            const body = `## grading done
+            <!-- reflex-grading -->
+
+            | Step1 | Step2 | Step3 | Step4 | Step5 | Unit | Integ | Code | Report | **Sum** |
+            |-------|-------|-------|-------|-------|------|-------|------|--------|---------|
+            | ${grades.step1} | ${grades.step2} | ${grades.step3} | ${grades.step4} | ${grades.step5} | ${grades.unitTest} | ${grades.integration} | ${grades.cleanCode} | ${grades.report} | **${grades.total}/105** |
+
+            build: ${buildOk ? 'ok' : 'failed'}. tests: ${testPass ? 'passed' : 'failed'}. lint: ${lintPass ? 'clean' : 'issues'}. coverage: ${cov}%.
+            grading: **${mode}** (test-based = نمره بر اساس تست‌های پاس‌شده؛ fallback = بر اساس کد).
+            student id(s): ${grades.studentId}
+
+            (download grades-output artifact for full json)`;
+
+            try {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber
+              });
+              const botComment = comments.find(c => c.body && c.body.includes('reflex-grading'));
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: body
+                });
+              }
+            } catch (err) {
+              const status = err.status ?? err.response?.status;
+              if (status === 403) {
+                console.log('Comment skipped (403). Grades are in the grades-output artifact.');
+              } else {
+                throw err;
+              }
+            }
